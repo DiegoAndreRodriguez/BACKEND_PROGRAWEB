@@ -1,0 +1,18 @@
+Paso 1 - Crear la Estructura: Ejecuta el script init_db.sql para crear las tablas. Puedes hacerlo con una herramienta como pgAdmin o desde la línea de comandos:
+
+bash (En el sql creado)
+psql -U tu_usuario -d tu_base_de_datos -f "ruta/a/init_db.sql"
+
+Paso 2 - Poblar los Datos: Una vez creadas las tablas, ejecuta el script seed_data.sql para llenarlas con los productos.
+
+bash (En el sql creado)
+psql -U tu_usuario -d tu_base_de_datos -f "ruta/a/seed_data.sql"
+
+Otra opción
+
+Ejecuta en la terminal este comando
+node seed_db.js
+
+
+Nota
+Como detalle tengan cuidado con el .env para acomodar su base de datos si es que sale error a los requerimientos que aparecen allí

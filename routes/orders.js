@@ -152,4 +152,45 @@ router.put('/:id/cancel', authenticateToken, async (req, res) => {
     }
 });
 
+// ============= CREATE NEW ORDER (AÑADIDO DESDE EL OTRO ARCHIVO) =============
+router.post('/', authenticateToken, async (req, res) => {
+    const { cartItems, shippingAddress, paymentMethod, totalAmount } = req.body;
+    const userId = req.user.id;
+
+    if (!cartItems || cartItems.length === 0) {
+        return res.status(400).json({ error: 'El carrito está vacío' });
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN'); // Iniciar transacción
+
+        // 1. Insertar en la tabla 'orders'
+        const orderResult = await client.query(
+            `INSERT INTO orders (user_id, total_amount, status, shipping_address, payment_method)
+             VALUES ($1, $2, 'completed', $3, $4) RETURNING id`,
+            [userId, totalAmount, shippingAddress, paymentMethod]
+        );
+        const orderId = orderResult.rows[0].id;
+
+        // 2. Insertar cada producto en 'order_items'
+        for (const item of cartItems) {
+            await client.query(
+                `INSERT INTO order_items (order_id, product_id, quantity, unit_price)
+                 VALUES ($1, $2, $3, $4)`,
+                [orderId, item.id, item.quantity, item.price]
+            );
+        }
+
+        await client.query('COMMIT'); // Finalizar transacción
+        res.status(201).json({ message: 'Pedido creado con éxito', orderId });
+    } catch (error) {
+        await client.query('ROLLBACK'); // Revertir en caso de error
+        console.error('Error al crear el pedido:', error);
+        res.status(500).json({ error: 'Error interno del servidor al crear el pedido' });
+    } finally {
+        client.release();
+    }
+});
+
 module.exports = router;
