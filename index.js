@@ -144,6 +144,46 @@ app.get('/api/products/:id', async (req, res) => {
     }
 });
 
+// ==========================================
+//  RUTAS DE ÓRDENES (Checkout)
+// ==========================================
+
+app.post('/api/orders', async (req, res) => {
+    const { userId, customer, shipping, payment, items, total } = req.body;
+
+    try {
+        // Insertar la orden en la base de datos
+        // Guardamos los items como un JSON para no complicarnos con tablas extra hoy
+        const newOrder = await pool.query(
+            `INSERT INTO orders (user_id, total, status, shipping_address, payment_method, items) 
+             VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+            [
+                userId || null, // Si es null (invitado), Postgres lo acepta si la columna lo permite
+                total,
+                'created',
+                JSON.stringify(shipping), // Guardamos dirección como texto/json
+                payment.method,
+                JSON.stringify(items)     // Guardamos el carrito como JSON
+            ]
+        );
+
+        res.json({ success: true, orderId: newOrder.rows[0].id });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Error al crear la orden' });
+    }
+});
+
+// Ruta para que el admin vea las órdenes 
+app.get('/api/orders', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM orders ORDER BY created_at DESC');
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: 'Error al cargar órdenes' });
+    }
+});
+
 app.listen(port, () => {
     console.log(`Backend corriendo en http://localhost:${port}`);
 });
