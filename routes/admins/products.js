@@ -2,40 +2,36 @@ const express = require("express");
 const router = express.Router();
 const { Pool } = require("pg");
 const authenticateToken = require("../../middleware/auth");
-const isAdmin = require("../../middleware/isAdmin");
+const isAdmin = require("../../middleware/isAdmin.js");
 
-// Conexión propia a la DB
+// Conexión a PostgreSQL
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl:
-    process.env.DATABASE_URL.includes("localhost") ||
-    process.env.DATABASE_URL.includes("127.0.0.1")
-      ? false
-      : { rejectUnauthorized: false },
+  ssl: (() => {
+    const url = process.env.DATABASE_URL || "";
+    const isLocal = url.includes("localhost") || url.includes("127.0.0.1");
+    return isLocal ? false : { rejectUnauthorized: false };
+  })(),
 });
 
-//      GET PRODUCTS
-
+// GET - Obtener todos los productos
 router.get("/", authenticateToken, isAdmin, async (req, res) => {
   try {
-    const result = await pool.query(
-      "SELECT * FROM products ORDER BY created_at DESC"
-    );
+    const result = await pool.query("SELECT * FROM products ORDER BY id");
     res.json(result.rows);
   } catch (err) {
-    console.error(err);
+    console.error("Error GET /admin/products:", err);
     res.status(500).json({ error: "Error al obtener productos" });
   }
 });
 
-//     CREATE PRODUCT
-
+// POST - Crear producto
 router.post("/", authenticateToken, isAdmin, async (req, res) => {
   const { name, category_id, price, stock, is_active } = req.body;
 
   if (
     !name ||
-    !category_id ||
+    category_id == null ||
     price == null ||
     stock == null ||
     is_active == null
@@ -45,37 +41,67 @@ router.post("/", authenticateToken, isAdmin, async (req, res) => {
 
   try {
     const result = await pool.query(
-      `INSERT INTO products (name, category_id, price, stock, is_active) 
+      `INSERT INTO products (name, category_id, price, stock, is_active)
        VALUES ($1, $2, $3, $4, $5) RETURNING *`,
       [name, category_id, price, stock, is_active]
     );
 
     res.status(201).json(result.rows[0]);
   } catch (err) {
-    console.error(err);
+    console.error("Error POST /admin/products:", err);
     res.status(500).json({ error: "Error al crear producto" });
   }
 });
 
-// =====================
-// ACTIVATE/DEACTIVATE PRODUCT
-// =====================
-router.patch("/:id/status", authenticateToken, isAdmin, async (req, res) => {
-  const { is_active } = req.body;
+// PUT - Editar producto
+router.put("/:id", authenticateToken, isAdmin, async (req, res) => {
+  const { name, category_id, price, stock, is_active } = req.body;
+  const { id } = req.params;
+
+  if (
+    !name ||
+    category_id == null ||
+    price == null ||
+    stock == null ||
+    is_active == null
+  ) {
+    return res.status(400).json({ error: "Todos los campos son requeridos" });
+  }
 
   try {
     const result = await pool.query(
-      "UPDATE products SET is_active=$1 WHERE id=$2 RETURNING *",
-      [is_active, req.params.id]
+      `UPDATE products
+       SET name=$1, category_id=$2, price=$3, stock=$4, is_active=$5
+       WHERE id=$6 RETURNING *`,
+      [name, category_id, price, stock, is_active, id]
     );
 
     if (result.rows.length === 0)
       return res.status(404).json({ error: "Producto no encontrado" });
 
-    res.json({ message: "Estado actualizado", product: result.rows[0] });
+    res.json(result.rows[0]);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Error al actualizar estado" });
+    console.error("Error PUT /admin/products/:id:", err);
+    res.status(500).json({ error: "Error al editar producto" });
+  }
+});
+
+// DELETE - Eliminar producto
+router.delete("/:id", authenticateToken, isAdmin, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const result = await pool.query(
+      "DELETE FROM products WHERE id=$1 RETURNING *",
+      [id]
+    );
+
+    if (result.rows.length === 0)
+      return res.status(404).json({ error: "Producto no encontrado" });
+
+    res.json({ message: "Producto eliminado", product: result.rows[0] });
+  } catch (err) {
+    console.error("Error DELETE /admin/products/:id:", err);
+    res.status(500).json({ error: "Error al eliminar producto" });
   }
 });
 
